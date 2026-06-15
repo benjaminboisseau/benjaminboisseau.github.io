@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% import "macros.html" as m %}
+{% block title %}{{ page.title }} &middot; {{ config.title }}{% endblock title %}
+{% block description %}{% if page.description %}<meta name="description" content="{{ page.description }}">{% endif %}{% endblock description %}
+{% block langnav %}{{ m::other_lang(translations=page.translations, current=lang) }}{% endblock langnav %}
+{% block langfoot %}{{ m::other_lang(translations=page.translations, current=lang) }}{% endblock langfoot %}
+{% block content %}
+<article>
+  <h1>{{ page.title }}</h1>
+  {% if page.date %}<div class="post-meta">{{ page.date }} &middot; Benjamin Boisseau</div>{% endif %}
+  {{ page.content | safe }}
+</article>
+{% endblock content %}

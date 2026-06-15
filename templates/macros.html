@@ -1,0 +1,5 @@
+{# Print one of two strings depending on the page language. #}
+{% macro t(lang, en, fr) %}{% if lang == "fr" %}{{ fr }}{% else %}{{ en }}{% endif %}{% endmacro %}
+
+{# Link to the same content in the other language. #}
+{% macro other_lang(translations, current) %}{% for tr in translations %}{% if tr.lang != current %}<a href="{{ tr.permalink | safe }}">{% if tr.lang == "fr" %}français{% else %}english{% endif %}</a>{% endif %}{% endfor %}{% endmacro %}

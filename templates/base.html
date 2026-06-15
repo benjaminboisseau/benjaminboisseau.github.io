@@ -1,0 +1,35 @@
+{% import "macros.html" as m %}<!DOCTYPE html>
+<html lang="{{ lang }}">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}{{ config.title }}{% endblock title %}</title>
+{% block description %}{% endblock description %}
+<link rel="stylesheet" href="{{ get_url(path='style.css') | safe }}">
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <div class="site-title"><a href="{{ get_url(path='@/_index.md', lang=lang) | safe }}">Benjamin Boisseau</a></div>
+  <div class="tagline">{{ m::t(lang=lang, en="Notes on streaming, broadcast and the systems behind them.", fr="Notes sur le streaming, le broadcast et les systèmes qui les font tourner.") }}</div>
+  <nav>
+    <a href="{{ get_url(path='@/_index.md', lang=lang) | safe }}">{{ m::t(lang=lang, en="home", fr="accueil") }}</a> &middot;
+    <a href="{{ get_url(path='@/about.md', lang=lang) | safe }}">{{ m::t(lang=lang, en="about", fr="à propos") }}</a> &middot;
+    <a href="https://github.com/benjaminboisseau">github</a> &middot;
+    {% block langnav %}{% endblock langnav %}
+  </nav>
+</header>
+
+<main>
+{% block content %}{% endblock content %}
+</main>
+
+<footer>
+  &copy; 2026 Benjamin Boisseau &middot; {{ m::t(lang=lang, en="built with Zola", fr="propulsé par Zola") }} &middot;
+  {% block langfoot %}{% endblock langfoot %}
+</footer>
+
+</div>
+</body>
+</html>

@@ -1,0 +1,9 @@
+base_url = "https://benjaminboisseau.github.io"
+title = "Benjamin Boisseau"
+default_language = "en"
+compile_sass = false
+build_search_index = false
+generate_feeds = false
+
+[languages.fr]
+title = "Benjamin Boisseau"

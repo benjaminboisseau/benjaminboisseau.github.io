@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% import "macros.html" as m %}
+{% block title %}{{ section.title }} &middot; {{ config.title }}{% endblock title %}
+{% block langnav %}{{ m::other_lang(translations=section.translations, current=lang) }}{% endblock langnav %}
+{% block langfoot %}{{ m::other_lang(translations=section.translations, current=lang) }}{% endblock langfoot %}
+{% block content %}
+<ul class="posts">
+{% for post in section.pages %}
+  <li>
+    <span class="date">{{ post.date }}</span>
+    <a class="title" href="{{ post.permalink | safe }}">{{ post.title }}</a>
+    <p class="summary">{{ post.description }}</p>
+  </li>
+{% endfor %}
+</ul>
+{% endblock content %}
