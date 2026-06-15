@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Measuring the cache-miss penalty at the HLS live edge &middot; Benjamin Boisseau</title>
+<meta name="description" content="Every HLS player chases the newest segment, the one least likely to be in the CDN edge cache. A small Rust tool measures the penalty that hides from every dashboard.">
+<link rel="stylesheet" href="../style.css">
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <div class="site-title"><a href="../index.html">Benjamin Boisseau</a></div>
+  <div class="tagline">Notes on streaming, broadcast and the systems behind them.</div>
+  <nav>
+    <a href="../index.html">home</a> &middot;
+    <a href="../about.html">about</a> &middot;
+    <a href="https://github.com/benjaminboisseau">github</a> &middot;
+    <a href="../fr/posts/cache-miss-live-edge.html">français</a>
+  </nav>
+</header>
+
+<main>
+<article>
+  <h1>Measuring the cache-miss penalty at the HLS live edge</h1>
+  <div class="post-meta">2026-06-15 &middot; Benjamin Boisseau</div>
+
+  <p>Every HLS player spends its life chasing the same file: the newest segment. After each
+  playlist reload it asks the CDN for the segment that was published a moment ago, plays it, and
+  comes back for the next one. That newest segment is also the one least likely to be sitting in
+  the CDN edge cache &mdash; and when it isn't, the player pays a penalty that almost no dashboard
+  will show you.</p>
+
+  <p>I wrote a small Rust tool, <a href="https://github.com/benjaminboisseau/hls-probe"><code>hls-probe</code></a>,
+  to measure that penalty directly. This is what it looks for, and why it matters.</p>
+
+  <h2>Why the live edge is a cache's worst case</h2>
+
+  <p>A CDN edge node caches objects on demand. The first time anyone at a given point-of-presence
+  requests an object, the edge has nothing to serve: it forwards the request upstream &mdash; to a
+  parent tier, and if needed all the way to your origin &mdash; fetches the bytes, caches them, and
+  only then answers. That is a <em>cache miss</em>. Every later request for the same object, until
+  it expires, is a <em>cache hit</em> served straight from the edge in single-digit milliseconds.</p>
+
+  <p>For a VOD catalogue this is a non-event: popular files are warm within seconds of publication
+  and stay warm. The live edge breaks the assumption. The segment a player wants is, by definition,
+  a few seconds old. If it is the first viewer to reach a particular edge node after that segment
+  was published, its request is a guaranteed cache miss, and the time-to-first-byte balloons while
+  the edge walks the request back to the origin.</p>
+
+  <p>The penalty is real but easy to miss, because it hides from the metrics operators usually
+  watch. Cache-offload ratio and average edge latency are both dominated by the overwhelming
+  majority of requests, which are warm hits. The handful of cold first-requests per segment, per
+  edge, disappear into the average &mdash; even though they land on exactly the requests players are
+  most time-sensitive about.</p>
+
+  <h2>A way to measure it: fresh versus warmed</h2>
+
+  <p>You cannot see a cache decision from playback alone, but you can isolate it with a simple
+  comparison. For each newly published segment:</p>
+
+  <ol>
+    <li>Request it <strong>immediately</strong>, the moment it appears in the playlist &mdash; this
+    is the <em>fresh</em> request, the one a cache miss would punish.</li>
+    <li>Wait one target duration, then request the <strong>same URL again</strong> &mdash; by now
+    your own first request has warmed the edge, so this is the <em>warmed</em> request, a
+    near-certain hit.</li>
+  </ol>
+
+  <p>The difference in time-to-first-byte between the two is the penalty, measured on the very
+  object a player would have fetched. Repeat it over several segments and the noise averages out. To
+  turn the inference into proof, read the CDN's cache-status headers on both requests: a clean
+  <em>miss &rarr; hit</em> transition confirms you measured caching and not network jitter.</p>
+
+  <p><code>hls-probe --edge-test</code> automates exactly this. It watches the live playlist, catches
+  each segment as it is published, runs the fresh/warmed pair, and reads the cache headers.</p>
+
+  <h2>A control: a direct origin shows no penalty</h2>
+
+  <p>Before trusting any positive result, it is worth checking that the method does not manufacture
+  one. Pointed at Unified Streaming's public live demo &mdash; a packager served by nginx, with no
+  CDN cache in front of it &mdash; the tool reports honestly:</p>
+
+<pre><code>$ hls-probe --edge-test -p 6 https://demo.unified-streaming.com/k8s/live/stable/live.isml/.m3u8
+  avg: fresh TTFB 53 ms, warmed 80 ms, penalty -27 ms
+  reading: no meaningful fresh-segment penalty observed (cache already warm, or origin very close to the edge)</code></pre>
+
+  <p>The fresh and warmed requests are statistically indistinguishable; the average "penalty" is
+  negative, which is just noise. There is no edge cache to miss, so there is no penalty &mdash; and
+  the tool says so rather than inventing one. That is the result you want from a control.</p>
+
+  <h2>The CDN signature: reading the cache headers</h2>
+
+  <p>On a real CDN the cache decision is not a guess &mdash; the edge tells you, if you ask. The two
+  big networks expose it directly.</p>
+
+  <p>CloudFront answers on every object:</p>
+
+<pre><code>X-Cache: Hit from cloudfront
+X-Amz-Cf-Pop: FRA56-P4
+Age: 7</code></pre>
+
+  <p>The <code>Age</code> header is the tell: it counts the seconds since the edge fetched the
+  object from origin. Scanning the same public test asset, I saw objects ranging from
+  <code>Age: 73414</code> (warm for twenty hours) down to <code>Age: 7</code> (pulled to the edge
+  seven seconds ago) &mdash; proof that objects genuinely cycle in and out of the cache rather than
+  living there forever.</p>
+
+  <p>Akamai is even more explicit, naming the edge server and the decision:</p>
+
+<pre><code>X-Cache: TCP_MISS from a2-19-125-146.deploy.akamaitechnologies.com (AkamaiGHost/22.5.3-...)</code></pre>
+
+  <p><code>TCP_MISS</code> versus <code>TCP_HIT</code> is the cache decision in plain text. When a
+  fresh request returns <code>TCP_MISS</code> at around a hundred milliseconds and the same segment,
+  one segment-duration later, returns <code>TCP_HIT</code> in single-digit milliseconds, you are
+  looking at the cache-miss penalty in the act &mdash; the first viewer per edge paying for everyone
+  who follows. That <em>miss &rarr; hit</em> transition, locked to the freshly published segment, is
+  the signature <code>--edge-test</code> is built to surface.</p>
+
+  <h2>What the penalty costs a player</h2>
+
+  <p>A hundred milliseconds sounds harmless until you place it in the player's timeline. The player
+  requests the newest segment the instant the playlist advances, and it is working against a buffer
+  it is trying to keep small for latency. Two things go wrong when that request is slow.</p>
+
+  <p>First, the obvious one: with a tight buffer &mdash; anything tuned toward low latency &mdash; a
+  slow first byte on every new segment eats into the safety margin and, in the worst case, stalls
+  playback. A 100&nbsp;ms penalty on a 2-second segment is five percent of the budget gone before a
+  single media byte arrives, repeated on every segment.</p>
+
+  <p>Second, the sneaky one: adaptive-bitrate logic estimates available bandwidth from how fast
+  segments download. A cache miss makes a segment arrive slowly for a reason that has nothing to do
+  with the viewer's connection. The ABR estimator cannot tell the difference, reads the slow
+  download as a congested network, and may switch the viewer <em>down</em> a quality level &mdash;
+  degrading a stream whose link was perfectly healthy.</p>
+
+  <p>Neither failure shows up as a CDN error. The bytes were delivered; the dashboard is green; the
+  viewer simply got a worse experience than the network could support.</p>
+
+  <h2>The structural fix</h2>
+
+  <p>This is one of the problems Low-Latency HLS was designed around. With blocking playlist reloads
+  and preload hints, the player can tell the CDN <em>in advance</em> which part is coming next, and
+  the edge can hold the request open and stream bytes as the packager produces them &mdash;
+  collapsing the miss-then-fetch round trip into a single pipelined exchange. The cache-miss penalty
+  does not disappear so much as it stops being a separate, serial round trip on the critical path.
+  Measuring the penalty first tells you how much there is to gain before you invest in the
+  migration.</p>
+
+  <h2>Running it yourself</h2>
+
+  <p><code>--edge-test</code> needs only a live playlist URL:</p>
+
+<pre><code>hls-probe --edge-test -p 8 https://your-cdn.example/live/master.m3u8</code></pre>
+
+  <p>Two honest caveats. The measurement is statistical &mdash; a single pair can be pure network
+  jitter, so collect several and trust the cache-header transitions over any individual timing. And
+  a probe on an unwatched staging or test channel is a pessimistic case: with no real audience,
+  every fresh segment is a guaranteed first-request miss, whereas on a popular production channel
+  some other viewer warms each edge within milliseconds and request coalescing spares everyone
+  behind them. That gap between staging and production is itself worth measuring &mdash; it tells you
+  how much of your tail latency is real and how much is an artifact of testing in an empty room.</p>
+
+  <p>The tool is open source and MIT-licensed:
+  <a href="https://github.com/benjaminboisseau/hls-probe">github.com/benjaminboisseau/hls-probe</a>.
+  Issues and pull requests welcome.</p>
+</article>
+</main>
+
+<footer>
+  &copy; 2026 Benjamin Boisseau &middot;
+  <a href="../index.html">home</a> &middot;
+  <a href="../fr/posts/cache-miss-live-edge.html">version française</a>
+</footer>
+
+</div>
+</body>
+</html>
