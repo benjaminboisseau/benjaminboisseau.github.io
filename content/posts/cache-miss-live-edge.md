@@ -6,13 +6,13 @@ description = "Every HLS player chases the newest segment — the one least like
 
 Every HLS player spends its life chasing the same file: the newest segment. After each playlist reload it asks the CDN for the segment that was published a moment ago, plays it, and comes back for the next one. That newest segment is also the one least likely to be sitting in the CDN edge cache — and when it isn't, the player pays a penalty that almost no dashboard will show you.
 
-I wrote a small Rust tool, [`hls-probe`](https://github.com/benjaminboisseau/hls-probe), to measure that penalty directly. This is what it looks for, and why it matters.
+So I wrote a small Rust tool, [`hls-probe`](https://github.com/benjaminboisseau/hls-probe), to measure that penalty directly — half because it matters to playback, half because the nagging suspicion that it was happening would not leave me alone. Here is what it looks for, and why it matters.
 
 ## Why the live edge is a cache's worst case
 
 A CDN edge node caches objects on demand. The first time anyone at a given point-of-presence requests an object, the edge has nothing to serve: it forwards the request upstream — to a parent tier, and if needed all the way to your origin — fetches the bytes, caches them, and only then answers. That is a *cache miss*. Every later request for the same object, until it expires, is a *cache hit* served straight from the edge in single-digit milliseconds.
 
-For a VOD catalogue this is a non-event: popular files are warm within seconds of publication and stay warm. The live edge breaks the assumption. The segment a player wants is, by definition, a few seconds old. If it is the first viewer to reach a particular edge node after that segment was published, its request is a guaranteed cache miss, and the time-to-first-byte balloons while the edge walks the request back to the origin.
+For a VOD catalogue this is a non-event: popular files are warm within seconds of publication and stay warm. The live edge breaks the assumption. The segment a player wants is, by definition, a few seconds old. If it is the first viewer to reach a particular edge node after that segment was published, its request is a guaranteed cache miss. Someone has to be first to every edge, and the CDN hands out no medal for it: the time-to-first-byte simply balloons while the edge walks the request all the way back to the origin.
 
 The penalty is real but easy to miss, because it hides from the metrics operators usually watch. Cache-offload ratio and average edge latency are both dominated by the overwhelming majority of requests, which are warm hits. The handful of cold first-requests per segment, per edge, disappear into the average — even though they land on exactly the requests players are most time-sensitive about.
 
@@ -37,7 +37,7 @@ $ hls-probe --edge-test -p 6 https://demo.unified-streaming.com/k8s/live/stable/
   reading: no meaningful fresh-segment penalty observed (cache already warm, or origin very close to the edge)
 ```
 
-The fresh and warmed requests are statistically indistinguishable; the average "penalty" is negative, which is just noise. There is no edge cache to miss, so there is no penalty — and the tool says so rather than inventing one. That is the result you want from a control.
+The fresh and warmed requests are statistically indistinguishable; the average "penalty" is negative, which is just noise. There is no edge cache to miss, so there is no penalty — and the tool says so rather than inventing one. That is the result you want from a control: a measurement tool that always finds something is not a measurement tool, it is a horoscope.
 
 ## The CDN signature: reading the cache headers
 

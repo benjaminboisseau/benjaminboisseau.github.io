@@ -6,13 +6,13 @@ description = "Tout lecteur HLS court après le segment le plus récent — celu
 
 Un lecteur HLS passe sa vie à courir après le même fichier : le segment le plus récent. Après chaque rechargement de playlist, il demande au CDN le segment publié quelques instants plus tôt, le joue, puis revient chercher le suivant. Or ce segment tout juste publié est aussi celui qui a le moins de chances de se trouver déjà dans le cache du edge CDN — et quand il n'y est pas, le lecteur paie une pénalité que presque aucun tableau de bord ne vous montrera.
 
-J'ai écrit un petit outil en Rust, [`hls-probe`](https://github.com/benjaminboisseau/hls-probe), pour mesurer cette pénalité directement. Voici ce qu'il cherche, et pourquoi cela compte.
+J'ai donc écrit un petit outil en Rust, [`hls-probe`](https://github.com/benjaminboisseau/hls-probe), pour mesurer cette pénalité directement — moitié parce qu'elle compte pour la lecture, moitié parce que le soupçon tenace qu'elle existait refusait de me lâcher. Voici ce qu'il cherche, et pourquoi cela compte.
 
 ## Pourquoi le live edge est le pire cas pour un cache
 
 Un nœud edge de CDN met les objets en cache à la demande. La première fois que quelqu'un, sur un point de présence donné, demande un objet, le edge n'a rien à servir : il relaie la requête en amont — vers un tier parent, et si nécessaire jusqu'à votre origine — récupère les octets, les met en cache, et alors seulement répond. C'est un *cache miss*. Toute requête ultérieure portant sur le même objet, jusqu'à son expiration, est un *cache hit* servi directement depuis le edge en quelques millisecondes.
 
-Pour un catalogue de VOD, c'est un non-événement : les fichiers populaires sont « chauds » dans les secondes qui suivent leur publication et le restent. Le live edge casse cette hypothèse. Le segment que veut un lecteur a, par définition, quelques secondes d'âge. S'il est le premier spectateur à atteindre un nœud edge donné après la publication de ce segment, sa requête est un cache miss garanti, et le time-to-first-byte s'envole pendant que le edge remonte la requête jusqu'à l'origine.
+Pour un catalogue de VOD, c'est un non-événement : les fichiers populaires sont « chauds » dans les secondes qui suivent leur publication et le restent. Le live edge casse cette hypothèse. Le segment que veut un lecteur a, par définition, quelques secondes d'âge. S'il est le premier spectateur à atteindre un nœud edge donné après la publication de ce segment, sa requête est un cache miss garanti. Il faut bien que quelqu'un soit le premier sur chaque edge, et le CDN ne remet pas de médaille pour ça : le time-to-first-byte s'envole simplement pendant que le edge remonte la requête jusqu'à l'origine.
 
 La pénalité est réelle mais facile à manquer, car elle se cache des métriques que les exploitants surveillent d'ordinaire. Le taux d'offload du cache comme la latence moyenne du edge sont dominés par l'écrasante majorité des requêtes, qui sont des hits chauds. La poignée de premières requêtes froides — une par segment, par edge — se dilue dans la moyenne, alors même qu'elle frappe précisément les requêtes pour lesquelles les lecteurs sont les plus sensibles au temps.
 
@@ -37,7 +37,7 @@ $ hls-probe --edge-test -p 6 https://demo.unified-streaming.com/k8s/live/stable/
   reading: no meaningful fresh-segment penalty observed (cache already warm, or origin very close to the edge)
 ```
 
-Les requêtes fresh et warmed sont statistiquement indiscernables ; la « pénalité » moyenne est négative, ce qui n'est que du bruit. Il n'y a pas de cache edge à manquer, donc pas de pénalité — et l'outil le dit, au lieu d'en inventer une. C'est exactement le résultat qu'on attend d'un témoin.
+Les requêtes fresh et warmed sont statistiquement indiscernables ; la « pénalité » moyenne est négative, ce qui n'est que du bruit. Il n'y a pas de cache edge à manquer, donc pas de pénalité — et l'outil le dit, au lieu d'en inventer une. C'est exactement le résultat qu'on attend d'un témoin : un outil de mesure qui trouve toujours quelque chose n'est pas un outil de mesure, c'est un horoscope.
 
 ## La signature CDN : lire les en-têtes de cache
 
