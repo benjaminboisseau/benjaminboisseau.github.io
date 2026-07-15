@@ -1,8 +1,4 @@
-# benjaminboisseau.github.io — personal site
-
-A small static site built with [Zola](https://www.getzola.org). Source of truth is
-Markdown; the look is a handful of plain HTML templates over a single stylesheet —
-no JavaScript, no tracker. Bilingual (English / French).
+# benjaminboisseau.github.io — blog/artciles
 
 ## Add a post
 
@@ -11,7 +7,7 @@ Drop a Markdown file in `content/posts/` with a little front matter:
 ```
 +++
 title = "My new post"
-date = 2026-07-01
+date = 2026-01-01
 description = "One sentence shown on the home page."
 +++
 
