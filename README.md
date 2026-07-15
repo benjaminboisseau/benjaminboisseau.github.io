@@ -1,4 +1,4 @@
-# benjaminboisseau.github.io — blog/artciles
+# benjaminboisseau.github.io — blog
 
 ## Add a post
 
