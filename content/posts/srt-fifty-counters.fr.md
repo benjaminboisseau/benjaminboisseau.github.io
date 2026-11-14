@@ -1,6 +1,7 @@
 +++
 title = "Cinquante compteurs et aucun diagnostic : lire les statistiques SRT comme un médecin"
 date = 2026-07-06
+updated = 2026-11-14
 description = "libsrt vous dit tout d'un flux qui meurt, sauf ce qui le tue. J'ai construit un petit outil qui échantillonne les statistiques toutes les 100 ms et nomme la maladie — puis j'ai laissé un lab plein de réseaux cassés réfuter ses trois premiers diagnostics."
 +++
 
@@ -118,6 +119,8 @@ Le dernier scénario du lab montre ce que le défaut attrape déjà : un modèle
 ```
 
 Ce verdict du conseiller a mérité son salaire : 300 ms configurées contre ~361 ms calculées nécessaires prédisent un flux qui tient *presque* — et de fait, 269 paquets perdus, 263 récupérés, et exactement 6 jetés. Un problème de marge que vous ne trouverez jamais dans une moyenne hebdomadaire. Les moyennes, c'est la façon dont un flux meurt sous un dashboard vert.
+
+**Mise à jour du 14 novembre 2026 — srt-doctor v0.2.** Deux chiffres cités plus haut ont changé dans le dépôt, et les deux changements découlent des preuves de ce billet. Le conseiller ajoute désormais à son estimation la durée de la pire rafale de pertes lorsqu'elle est longue devant l'aller-retour : sur la session Gilbert-Elliott il demande ~509 ms au lieu de ~361 ms. L'ancien chiffre dépassait de 61 ms les 300 ms configurées et parlait d'un flux qui tient « presque » ; six paquets jetés disent que la marge était plus loin que cela, parce qu'une retransmission ne peut être demandée qu'une fois la rafale terminée. Et les statistiques de RTT ignorent maintenant l'estimation de départ de 100 ms de libsrt : le rapport « débit insuffisant » affiche `344.0/2950.1/3395.4/3449.2 ms` — la colonne min n'a plus besoin de ma parenthèse. Le texte ci-dessus reste tel que publié ; les rapports régénérés sont dans `lab/data/`, rejoués à partir des mêmes journaux bruts.
 
 Tout est reproductible depuis le dépôt — l'outil, le script du lab, et les journaux JSONL bruts derrière chaque rapport cité. Si vous exploitez des liens de contribution et avez une histoire où les statistiques vous ont menti, je veux l'entendre.
 

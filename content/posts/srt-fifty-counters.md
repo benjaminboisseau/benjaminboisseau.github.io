@@ -1,6 +1,7 @@
 +++
 title = "Fifty counters and no diagnosis: reading SRT statistics like a doctor"
 date = 2026-07-06
+updated = 2026-11-14
 description = "libsrt tells you everything about a dying stream except what is killing it. I built a small tool that samples the stats at 100 ms and names the disease — then let a lab full of broken networks prove its first three diagnoses wrong."
 +++
 
@@ -118,6 +119,8 @@ The last lab scenario shows what the default already catches: a Gilbert-Elliott 
 ```
 
 That advisor verdict earned its keep here: 300 ms configured against a computed need of ~361 ms predicts a stream that *almost* copes — and indeed 269 packets were lost, 263 recovered, and exactly 6 dropped. A margin problem you would never find in a weekly average. Averages are how a stream dies with a green dashboard.
+
+**Update, 14 November 2026 — srt-doctor v0.2.** Two numbers quoted above have changed in the repo, and both changes come from this post's own evidence. The advisor now adds the duration of the worst loss burst to its estimate when that burst is long compared with the round trip: on the Gilbert-Elliott run it asks for ~509 ms instead of ~361 ms. The old figure was 61 ms above the configured 300 ms and called the stream "almost coping"; six dropped packets say the margin was further away than that, because a retransmission cannot be requested until the burst has ended. And the RTT statistics now skip libsrt's 100 ms starting estimate, so the bandwidth-starved report reads `344.0/2950.1/3395.4/3449.2 ms` — the min column no longer needs my parenthesis. The text above is left as published; the regenerated reports are in `lab/data/`, replayed from the same raw sample logs.
 
 Everything here is reproducible from the repo — the tool, the lab script, and the raw JSONL sample logs behind every quoted report. If you run contribution links and have a war story where the stats lied to you, I want to hear it.
 
